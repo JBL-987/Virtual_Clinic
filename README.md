@@ -1,16 +1,30 @@
-# gemma_ai
+# Virtual Clinic 
 
-A new Flutter project.
+My Flutter Project With Ai as a Doctor
 
-## Getting Started
+## This Project is still on development
+you may contribute if you want 
 
-This project is a starting point for a Flutter application.
+```bash
+git clone https://github.com/JBL-987/Virtual_Clinic.git
+cd <this_repo_name>
+```
+## For web testing
 
-A few resources to get you started if this is your first Flutter project:
+```bash
+flutter clean
+flutter pub get
+flutter run
+```
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## For android emulator testing
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```bash
+flutter clean
+flutter pub get
+flutter emulators --launch <your_emulator>
+ flutter run -d <yout_emulator>
+```
+
+##make sure you already installed flutter first on your system env
+

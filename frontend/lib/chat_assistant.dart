@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:convert';
-import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 
 class Message {
@@ -17,11 +15,6 @@ class Message {
     this.type,
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
-}
-
-class Environment {
-  static String get apiUrl =>
-      dotenv.env['API_URL'] ?? 'http://localhost:11434/api/chat';
 }
 
 class ChatAssistantPage extends StatefulWidget {
@@ -49,7 +42,7 @@ class _ChatAssistantPageState extends State<ChatAssistantPage> {
       _messages.add(
         Message(
           role: 'assistant',
-          content: 'Hello! How can I assist you today?',
+          content: "Hello! I'm a doctor here how can i help you?",
         ),
       );
     });
@@ -80,7 +73,7 @@ class _ChatAssistantPageState extends State<ChatAssistantPage> {
 
     try {
       final response = await http.post(
-        Uri.parse(Environment.apiUrl),
+        Uri.parse('http://10.25.85.106:11434/api/chat'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'messages': [
@@ -121,82 +114,6 @@ class _ChatAssistantPageState extends State<ChatAssistantPage> {
     }
 
     _messageController.clear();
-  }
-
-  Future<void> handleImageUpload() async {
-    try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.image,
-        allowMultiple: false,
-      );
-
-      if (result != null) {
-        final file = result.files.single;
-        final filePath = file.path!;
-
-        setState(() {
-          _messages.add(Message(
-            role: 'user',
-            content: filePath,
-            type: 'image',
-          ));
-        });
-
-        await sendImageMessage(filePath);
-      }
-    } catch (e) {
-      setState(() {
-        _messages.add(Message(
-          role: 'error',
-          content: 'Error uploading image. Please try again.',
-        ));
-      });
-    }
-  }
-
-  Future<void> sendImageMessage(String filePath) async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final bytes = await File(filePath).readAsBytes();
-      final base64Image = base64Encode(bytes);
-
-      final response = await http.post(
-        Uri.parse(Environment.apiUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'messages': [
-            {'role': 'user', 'image': base64Image}
-          ],
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        final jsonResponse = jsonDecode(response.body);
-        final responseContent =
-            jsonResponse['message']['content'] ?? "No response content";
-
-        setState(() {
-          _messages.add(Message(role: 'assistant', content: responseContent));
-        });
-      } else {
-        throw Exception('Failed to process image');
-      }
-    } catch (e) {
-      setState(() {
-        _messages.add(Message(
-          role: 'error',
-          content: 'Error processing image. Please try again.',
-        ));
-      });
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-      _scrollToBottom();
-    }
   }
 
   @override
@@ -378,11 +295,6 @@ class _ChatAssistantPageState extends State<ChatAssistantPage> {
       padding: const EdgeInsets.all(12),
       child: Row(
         children: [
-          IconButton(
-            onPressed: handleImageUpload,
-            icon: const Icon(Icons.add_photo_alternate),
-            color: Colors.teal,
-          ),
           Expanded(
             child: Container(
               decoration: BoxDecoration(

@@ -9,9 +9,10 @@ you may contribute if you want
 git clone https://github.com/JBL-987/Virtual_Clinic.git
 cd <this_repo_name>
 ```
-## For web testing
+## For web testing and run the frontend
 
 ```bash
+cd fronted
 flutter clean
 flutter pub get
 flutter run
@@ -25,6 +26,13 @@ flutter pub get
 flutter emulators --launch <your_emulator>
  flutter run -d <yout_emulator>
 ```
+## to run the backend
 
-##make sure you already installed flutter first on your system env
+```bash
+cd backend
+npm install
+node server.js 
+```
+
+## make sure you already installed flutter first on your system env
 

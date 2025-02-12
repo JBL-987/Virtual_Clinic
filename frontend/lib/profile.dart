@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:mongo_dart/mongo_dart.dart' as mongo;
+import 'authservice.dart';
+import 'login_screen.dart';
 
 class ProfilePage extends StatefulWidget {
-  final String userId; // Add user ID parameter to fetch specific user data
+  final String userId;
   const ProfilePage({super.key, required this.userId});
 
   @override
@@ -11,101 +11,99 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _newPasswordController = TextEditingController();
+  final AuthService _authService = AuthService();
   bool _isLoading = false;
   bool _isEditing = false;
-
-  static const String USER_COLLECTION = "users";
-  mongo.Db? _db;
+  bool _obscurePassword = true;
+  Map<String, dynamic>? _userProfile;
 
   @override
   void initState() {
     super.initState();
-    _connectDB();
+    _loadProfile();
   }
 
-  Future<void> _connectDB() async {
-    try {
-      final mongoUrl = dotenv.env['MONGO_URL'];
-      if (mongoUrl == null) {
-        throw Exception('MONGO_URL not found in environment variables');
-      }
-      _db = await mongo.Db.create(mongoUrl);
-      await _db!.open();
-      print("Connected to MongoDB Atlas!");
-      _loadUserProfile();
-    } catch (e) {
-      print("Error connecting to MongoDB: $e");
-      _showError("Database connection error. Please try again later.");
-      _db = null;
-    }
-  }
-
-  Future<void> _loadUserProfile() async {
+  Future<void> _loadProfile() async {
     setState(() => _isLoading = true);
     try {
-      final userCollection = _db!.collection(USER_COLLECTION);
-      final user = await userCollection
-          .findOne(mongo.where.id(mongo.ObjectId.fromHexString(widget.userId)));
-
-      if (user != null) {
+      final result = await _authService.getProfile();
+      if (!mounted) return;
+      if (result['success']) {
         setState(() {
-          _nameController.text = user['name'] ?? '';
-          _emailController.text = user['email'] ?? '';
-          _phoneController.text = user['phone'] ?? '';
+          _userProfile = result['profile'];
+          _emailController.text = _userProfile?['email'] ?? '';
         });
+      } else {
+        _showSnackBar(result['message'], Colors.red);
       }
-    } catch (e) {
-      _showError("Error loading profile data");
-      print("Profile loading error: $e");
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _updateProfile() async {
+    if (!_validateInputs()) return;
     setState(() => _isLoading = true);
     try {
-      final userCollection = _db!.collection(USER_COLLECTION);
-      await userCollection.update(
-        mongo.where.id(mongo.ObjectId.fromHexString(widget.userId)),
-        {
-          '\$set': {
-            'name': _nameController.text.trim(),
-            'email': _emailController.text.trim(),
-          }
-        },
-      );
-
-      _showSuccess("Profile updated successfully");
-      setState(() => _isEditing = false);
-    } catch (e) {
-      _showError("Error updating profile");
-      print("Profile update error: $e");
+      final updates = {
+        'email': _emailController.text.trim(),
+        if (_newPasswordController.text.isNotEmpty)
+          'password': _newPasswordController.text,
+      };
+      final result = await _authService.updateProfile(updates);
+      if (!mounted) return;
+      if (result['success']) {
+        setState(() {
+          _userProfile = result['profile'];
+          _isEditing = false;
+          _newPasswordController.clear();
+        });
+        _showSnackBar('Profile updated successfully', Colors.green);
+      } else {
+        _showSnackBar(result['message'], Colors.red);
+      }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _showError(String message) {
+  Future<void> _logout() async {
+    await _authService.logout();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ),
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => const LoginPage()),
+      (route) => false,
     );
   }
 
-  void _showSuccess(String message) {
-    if (!mounted) return;
+  bool _validateInputs() {
+    if (_emailController.text.trim().isEmpty) {
+      _showSnackBar('Email cannot be empty', Colors.red);
+      return false;
+    }
+    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}\$')
+        .hasMatch(_emailController.text.trim())) {
+      _showSnackBar('Please enter a valid email address', Colors.red);
+      return false;
+    }
+    if (_newPasswordController.text.isNotEmpty &&
+        _newPasswordController.text.length < 6) {
+      _showSnackBar(
+          'New password must be at least 6 characters long', Colors.red);
+      return false;
+    }
+    return true;
+  }
+
+  void _showSnackBar(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-      ),
+          content: Text(message),
+          backgroundColor: color,
+          behavior: SnackBarBehavior.floating),
     );
   }
 
@@ -113,115 +111,121 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Profile',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: const Text('Profile',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.teal,
         actions: [
-          IconButton(
-            icon: Icon(_isEditing ? Icons.save : Icons.edit),
-            onPressed: _isLoading
-                ? null
-                : () {
-                    if (_isEditing) {
-                      _updateProfile();
-                    } else {
-                      setState(() => _isEditing = true);
-                    }
-                  },
-          ),
+          IconButton(icon: const Icon(Icons.logout), onPressed: _logout),
         ],
       ),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Colors.teal, Colors.tealAccent],
+            colors: [Colors.white, Colors.tealAccent],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
         ),
-        child: _isLoading
-            ? const Center(
-                child: CircularProgressIndicator(color: Colors.white))
-            : Center(
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Card(
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16.0)),
+                elevation: 8.0,
                 child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Card(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16.0),
-                    ),
-                    elevation: 8.0,
-                    child: Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          const CircleAvatar(
-                            radius: 50,
-                            backgroundColor: Colors.teal,
-                            child: Icon(
-                              Icons.person,
-                              size: 50,
-                              color: Colors.white,
+                  padding: const EdgeInsets.all(24.0),
+                  child: _isLoading
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.teal)))
+                      : Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const Text(
+                              'Your Profile',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                  fontSize: 24.0,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.teal),
                             ),
-                          ),
-                          const SizedBox(height: 24.0),
-                          TextField(
-                            controller: _nameController,
-                            decoration: InputDecoration(
-                              labelText: 'Name',
-                              prefixIcon: const Icon(Icons.person),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8.0),
+                            const SizedBox(height: 24.0),
+                            TextFormField(
+                              controller: _emailController,
+                              decoration: InputDecoration(
+                                labelText: 'Email',
+                                prefixIcon: const Icon(Icons.email),
+                                border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12.0)),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12.0),
+                                  borderSide:
+                                      const BorderSide(color: Colors.teal),
+                                ),
                               ),
+                              enabled: false,
                             ),
-                            enabled: _isEditing,
-                          ),
-                          const SizedBox(height: 16.0),
-                          TextField(
-                            controller: _emailController,
-                            decoration: InputDecoration(
-                              labelText: 'Email',
-                              prefixIcon: const Icon(Icons.email),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8.0),
+                            const SizedBox(height: 16.0),
+                            if (_isEditing)
+                              TextFormField(
+                                controller: _newPasswordController,
+                                obscureText: _obscurePassword,
+                                decoration: InputDecoration(
+                                  labelText: 'New Password (optional)',
+                                  prefixIcon: const Icon(Icons.lock),
+                                  suffixIcon: IconButton(
+                                    icon: Icon(_obscurePassword
+                                        ? Icons.visibility
+                                        : Icons.visibility_off),
+                                    onPressed: () => setState(() =>
+                                        _obscurePassword = !_obscurePassword),
+                                  ),
+                                  border: OutlineInputBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(12.0)),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12.0),
+                                    borderSide:
+                                        const BorderSide(color: Colors.teal),
+                                  ),
+                                ),
                               ),
-                            ),
-                            enabled: _isEditing,
-                          ),
-                          const SizedBox(height: 16.0),
-                          TextField(
-                            controller: _phoneController,
-                            decoration: InputDecoration(
-                              labelText: 'Phone',
-                              prefixIcon: const Icon(Icons.phone),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8.0),
+                            const SizedBox(height: 24.0),
+                            ElevatedButton(
+                              onPressed: _isEditing
+                                  ? _updateProfile
+                                  : () => setState(() => _isEditing = true),
+                              style: ElevatedButton.styleFrom(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 16.0),
+                                backgroundColor: Colors.teal,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12.0)),
                               ),
+                              child: Text(
+                                  _isEditing ? 'Save Changes' : 'Edit Profile',
+                                  style: const TextStyle(
+                                      fontSize: 16.0, color: Colors.white)),
                             ),
-                            enabled: _isEditing,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                          ],
+                        ),
                 ),
               ),
+            ),
+          ),
+        ),
       ),
     );
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
     _emailController.dispose();
-    _phoneController.dispose();
-    _db?.close();
+    _newPasswordController.dispose();
     super.dispose();
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class Message {
   final String role;
@@ -63,6 +64,17 @@ class _ChatAssistantPageState extends State<ChatAssistantPage> {
   Future<void> sendMessage() async {
     if (_messageController.text.isEmpty) return;
 
+    final _apikey = dotenv.env['QWEN_API_KEY'];
+    if (_apikey == null || _apikey.isEmpty) {
+      setState(() {
+        _messages.add(Message(
+            role: 'error',
+            content: 'API Key is missing. Please check your configuration.'));
+      });
+      return;
+    }
+    final String _apiurl = 'https://openrouter.ai/api/v1';
+
     final userMessage = _messageController.text;
     setState(() {
       _messages.add(Message(role: 'user', content: userMessage));
@@ -72,29 +84,45 @@ class _ChatAssistantPageState extends State<ChatAssistantPage> {
     _scrollToBottom();
 
     try {
-      final response = await http.post(
-        Uri.parse('http://10.25.85.106:11434/api/chat'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'messages': [
-            {'role': 'user', 'content': userMessage}
-          ],
-        }),
-      );
+      final response = await http
+          .post(
+            Uri.parse('$_apiurl/chat/completions'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $_apikey'
+            },
+            body: jsonEncode({
+              'model': "qwen/qwen-vl-plus:free",
+              'messages': [
+                {'role': 'user', 'content': userMessage}
+              ],
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body);
-        final responseContent =
-            jsonResponse['message']['content'] ?? "No response content";
-
-        setState(() {
-          _messages.add(Message(role: 'assistant', content: responseContent));
-        });
+        if (jsonResponse.containsKey('choices') &&
+            jsonResponse['choices'] is List &&
+            jsonResponse['choices'].isNotEmpty) {
+          final responseContent = jsonResponse['choices'][0]['message']
+                  ['content'] ??
+              "No response content";
+          setState(() {
+            _messages.add(Message(role: 'assistant', content: responseContent));
+          });
+        } else {
+          setState(() {
+            _messages.add(Message(
+                role: 'error', content: 'Invalid response from server.'));
+          });
+        }
       } else {
         setState(() {
           _messages.add(Message(
             role: 'error',
-            content: 'Error: Unable to process request. Please try again.',
+            content:
+                'Error: Unable to process request (${response.statusCode}).',
           ));
         });
       }

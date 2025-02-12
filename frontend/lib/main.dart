@@ -1,20 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'login_screen.dart';
-import 'home_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  try {
-    await dotenv.load(fileName: ".env");
-    print("Environment variables loaded: ${dotenv.env}"); // Debugging output
-  } catch (e) {
-    print("Error loading .env file: $e");
-  }
-
-  runApp(MedicalCheckupApp());
+  await dotenv.load(fileName: ".env");
+  print("Loaded API_URL: ${dotenv.env['API_URL']}");
+  runApp(const MedicalCheckupApp());
 }
+
+final String apiUrl = dotenv.env['API_URL'] ?? "API_URL_NOT_FOUND";
 
 class MedicalCheckupApp extends StatelessWidget {
   const MedicalCheckupApp({super.key});
@@ -26,7 +21,7 @@ class MedicalCheckupApp extends StatelessWidget {
       title: "Virtual Clinic",
       theme: ThemeData(
         primarySwatch: Colors.teal,
-        textTheme: TextTheme(
+        textTheme: const TextTheme(
           bodyMedium: TextStyle(fontSize: 18.0, color: Colors.black87),
         ),
         cardTheme: CardTheme(
@@ -36,7 +31,7 @@ class MedicalCheckupApp extends StatelessWidget {
           ),
         ),
       ),
-      home: HomePage(),
+      home: const LoginPage(),
     );
   }
 }

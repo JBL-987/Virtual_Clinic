@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'authservice.dart';
 import 'home_page.dart';
 import 'signup_page.dart';
-import 'package:mongo_dart/mongo_dart.dart' as mongo;
-import 'package:bcrypt/bcrypt.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -15,68 +13,31 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final AuthService _authService = AuthService();
   bool _isLoading = false;
-
-  static const String USER_COLLECTION = "users";
-  mongo.Db? _db;
-
-  @override
-  void initState() {
-    super.initState();
-    _connectDB();
-  }
-
-  Future<void> _connectDB() async {
-    try {
-      final mongoUrl = dotenv.env['MONGO_URL'];
-      if (mongoUrl == null) {
-        throw Exception('MONGO_URL not found in environment variables');
-      }
-      _db = await mongo.Db.create(mongoUrl);
-      await _db!.open();
-      print("Connected to MongoDB Atlas!");
-    } catch (e) {
-      print("Error connecting to MongoDB: $e");
-      _showError("Database connection error. Please try again later.");
-      _db = null; // Fallback jika koneksi gagal
-    }
-  }
+  bool _obscurePassword = true;
 
   Future<void> _login() async {
+    if (!_validateInputs()) return;
+
     setState(() => _isLoading = true);
 
     try {
-      String email = _emailController.text.trim();
-      String password = _passwordController.text;
-
-      if (email.isEmpty || password.isEmpty) {
-        _showError("Please fill in all fields");
-        return;
-      }
-
-      final userCollection = _db!.collection(USER_COLLECTION);
-      final user = await userCollection.findOne(mongo.where.eq("email", email));
-
-      if (user == null) {
-        _showError("User not found");
-        return;
-      }
-
-      String? userPassword = user['password']?.toString();
-      if (userPassword == null || !BCrypt.checkpw(password, userPassword)) {
-        _showError("Invalid password");
-        return;
-      }
-
-      // Login berhasil
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomePage()),
+      final result = await _authService.login(
+        _emailController.text.trim(),
+        _passwordController.text,
       );
-    } catch (e) {
-      _showError("Login failed. Please try again.");
-      print("Login error: $e");
+
+      if (!mounted) return;
+
+      if (result['success']) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomePage()),
+        );
+      } else {
+        _showError(result['message']);
+      }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -84,20 +45,29 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  bool _validateInputs() {
+    if (_emailController.text.trim().isEmpty ||
+        _passwordController.text.isEmpty) {
+      _showError('Please fill in all fields');
+      return false;
+    }
+
+    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+        .hasMatch(_emailController.text.trim())) {
+      _showError('Please enter a valid email address');
+      return false;
+    }
+
+    return true;
+  }
+
   void _showError(String message) {
-    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
       ),
-    );
-  }
-
-  void _signup() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const SignupPage()),
     );
   }
 
@@ -112,10 +82,10 @@ class _LoginPageState extends State<LoginPage> {
             end: Alignment.bottomCenter,
           ),
         ),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
+        child: SafeArea(
+          child: Center(
             child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
               child: Card(
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16.0),
@@ -128,7 +98,7 @@ class _LoginPageState extends State<LoginPage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const Text(
-                        'Welcome to Virtual Clinic!',
+                        'Welcome Back!',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 24.0,
@@ -136,29 +106,49 @@ class _LoginPageState extends State<LoginPage> {
                           color: Colors.teal,
                         ),
                       ),
-                      const SizedBox(height: 16.0),
-                      TextField(
+                      const SizedBox(height: 24.0),
+                      TextFormField(
                         controller: _emailController,
                         decoration: InputDecoration(
                           labelText: 'Email',
                           prefixIcon: const Icon(Icons.email),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8.0),
+                            borderRadius: BorderRadius.circular(12.0),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12.0),
+                            borderSide: const BorderSide(color: Colors.teal),
                           ),
                         ),
                         keyboardType: TextInputType.emailAddress,
+                        textInputAction: TextInputAction.next,
                       ),
                       const SizedBox(height: 16.0),
-                      TextField(
+                      TextFormField(
                         controller: _passwordController,
                         decoration: InputDecoration(
                           labelText: 'Password',
                           prefixIcon: const Icon(Icons.lock),
+                          suffixIcon: IconButton(
+                            icon: Icon(_obscurePassword
+                                ? Icons.visibility
+                                : Icons.visibility_off),
+                            onPressed: () {
+                              setState(
+                                  () => _obscurePassword = !_obscurePassword);
+                            },
+                          ),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8.0),
+                            borderRadius: BorderRadius.circular(12.0),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12.0),
+                            borderSide: const BorderSide(color: Colors.teal),
                           ),
                         ),
-                        obscureText: true,
+                        obscureText: _obscurePassword,
+                        textInputAction: TextInputAction.done,
+                        onFieldSubmitted: (_) => _login(),
                       ),
                       const SizedBox(height: 24.0),
                       ElevatedButton(
@@ -167,7 +157,7 @@ class _LoginPageState extends State<LoginPage> {
                           padding: const EdgeInsets.symmetric(vertical: 16.0),
                           backgroundColor: Colors.teal,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8.0),
+                            borderRadius: BorderRadius.circular(12.0),
                           ),
                         ),
                         child: _isLoading
@@ -190,12 +180,18 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 16.0),
                       TextButton(
-                        onPressed: _signup,
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => const SignupPage()),
+                          );
+                        },
                         child: const Text(
-                          "Don't have an account yet? Sign up",
+                          "Don't have an account? Sign up",
                           style: TextStyle(
-                            fontSize: 14.0,
                             color: Colors.teal,
+                            fontSize: 14.0,
                           ),
                         ),
                       ),
@@ -214,7 +210,6 @@ class _LoginPageState extends State<LoginPage> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
-    _db?.close();
     super.dispose();
   }
 }

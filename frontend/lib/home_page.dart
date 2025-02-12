@@ -296,25 +296,14 @@ class _HomePageState extends State<HomePage> {
       case 3: //Exit
         _showExitConfirmation();
         break;
-      case 4: // Logout
-        _showLogoutConfirmation();
-        break;
     }
   }
 
   Future<void> _showProfileDialog() async {
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(title: const Text('Profile'), actions: [
-        TextButton(
-            onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) =>
-                          const ProfilePage(userId: 'user_id_here')),
-                ),
-            child: const Text('Go to Profile'))
-      ]),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+          builder: (context) => const ProfilePage(userId: 'user_id_here')),
     );
   }
 
@@ -342,33 +331,6 @@ class _HomePageState extends State<HomePage> {
 
     if (shouldExit ?? false) {
       exit(0);
-    }
-  }
-
-  Future<void> _showLogoutConfirmation() async {
-    final shouldLogout = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Logout'),
-        content: const Text('Are you sure you want to logout?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const LoginPage()),
-            ),
-            child: const Text('Logout'),
-          ),
-        ],
-      ),
-    );
-
-    if (shouldLogout ?? false) {
-      // Implement logout logic here
     }
   }
 
@@ -439,11 +401,6 @@ class _HomePageState extends State<HomePage> {
                 icon: Icon(Icons.exit_to_app),
                 label: 'Exit',
                 tooltip: 'Exit App',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.logout),
-                label: 'Logout',
-                tooltip: 'Logout',
               ),
             ],
             onDestinationSelected: _handleNavigation,

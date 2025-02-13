@@ -1,6 +1,6 @@
 # Virtual Clinic 
 
-My Flutter Project With Ai as a Doctor
+My Flutter Project With AI Chat as a Doctor
 
 ## This Project is still on development
 you may contribute if you want 
